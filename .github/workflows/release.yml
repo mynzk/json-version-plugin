@@ -204,6 +204,13 @@ jobs:
           fi
           echo "ok: publishing $pkg"
 
+      - name: Verify Token User
+        run: |
+          npm whoami --registry=https://registry.npmjs.org/
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+
       - name: Publish to npm
         working-directory: packages/json-version-plugin
         run: pnpm publish --access public --no-git-checks --registry=https://npmjs.org
