@@ -1,11 +1,11 @@
-# vite-plugin-i18n-version
+# @frada/json-version-plugin
 
 Compute a content hash of your JSON i18n files and inject it via `config.define`.
 
 ## Install
 
 ```sh
-pnpm add -D json-version-plugin
+pnpm add -D @frada/json-version-plugin
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ pnpm add -D json-version-plugin
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite';
-import jsonVersionPlugin from 'json-version-plugin';
+import jsonVersionPlugin from '@frada/json-version-plugin';
 
 export default defineConfig({
   plugins: [

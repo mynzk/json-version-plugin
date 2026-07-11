@@ -26,7 +26,7 @@ export default function jsonVersionPlugin(options: PluginOptions) {
 
   return {
     name: PLUGIN_NAME,
-    enforce: 'pre',
+    enforce: 'post',
 
     async configResolved(config: any) {
       if (!existsSync(absRoot)) {
