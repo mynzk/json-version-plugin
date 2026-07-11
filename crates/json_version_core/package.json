@@ -1,6 +1,6 @@
 {
   "name": "json-version-core",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Native module for json-version-plugin",
   "main": "index.js",

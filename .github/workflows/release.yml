@@ -186,6 +186,10 @@ jobs:
       - name: Install workspace deps
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      - name: Build JS/TS interface
+        working-directory: packages/json-version-plugin
+        run: pnpm build
+
       # The version baked into package.json must match the tag we just
       # pushed — otherwise `pnpm publish` will happily publish e.g. 0.1.0
       # under a v0.2.0 tag. Skipped for `workflow_dispatch` since that
