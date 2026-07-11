@@ -1,2 +1,2 @@
 # json-version-plugin
-检测json文件写入哈希版本
+检测多语言文件变动
