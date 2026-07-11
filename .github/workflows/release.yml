@@ -142,7 +142,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
-          registry-url: 'https://npmjs.org'
+          registry-url: 'https://registry.npmjs.org/'
 
       # Each download is a distinct step (download-artifact cannot be invoked
       # from inside a `run:` shell). `merge-multiple: true` lets four calls
@@ -213,6 +213,6 @@ jobs:
 
       - name: Publish to npm
         working-directory: packages/json-version-plugin
-        run: pnpm publish --access public --no-git-checks --registry=https://npmjs.org
+        run: pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
