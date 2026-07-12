@@ -4,10 +4,14 @@ import { dirname, join } from 'node:path';
 
 // ESM has no `require` in scope; create one anchored to this module so we can
 // load the prebuilt .node binary synchronously regardless of caller context
-// (Vite, Jest, tsx, etc.). The previous bare `require()` calls only worked in
-// CJS — under ESM the loader threw "require is not defined" and the try/catch
-// in findBinary silently swallowed the error, returning a non-existent path.
-const nodeRequire = createRequire(import.meta.url);
+// (Vite, Jest, tsx, etc.). When bundled to CJS by tsup, `import.meta.url`
+// becomes empty, so fall back to `__filename` (always defined in CJS).
+const moduleUrl: string =
+  typeof __filename !== 'undefined'
+    ? __filename
+    : (import.meta as ImportMeta).url;
+
+const nodeRequire = createRequire(moduleUrl);
 
 export interface ComputeOptionsNative {
   root: string;
@@ -34,24 +38,13 @@ export class NativeLoadError extends Error {
 
 /**
  * Resolve the directory of this module in both ESM and CJS contexts.
+ * `moduleUrl` is `__filename` in CJS and a `file://` URL in ESM.
  */
 function moduleDir(): string {
-  // ESM
-  try {
-    const url = import.meta.url;
-    if (typeof url === 'string' && url.startsWith('file://')) {
-      return dirname(fileURLToPath(url));
-    }
-  } catch {
-    // fall through
+  if (moduleUrl.startsWith('file://')) {
+    return dirname(fileURLToPath(moduleUrl));
   }
-  // CJS
-  try {
-    const req = createRequire(import.meta.url ?? __filename);
-    return dirname(req.resolve('./'));
-  } catch {
-    return __dirname;
-  }
+  return dirname(moduleUrl);
 }
 
 /**

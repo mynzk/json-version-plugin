@@ -25,7 +25,7 @@ describe('i18nVersionPlugin', () => {
 
   it('returns a plugin object with name', () => {
     const plugin = i18nVersionPlugin({ include: ['locales/**/*.json'], root: fixturesDir });
-    expect(plugin.name).toBe('vite-plugin-i18n-version');
+    expect(plugin.name).toBe('json-version-plugin');
     expect(typeof plugin.configResolved).toBe('function');
   });
 
@@ -35,7 +35,7 @@ describe('i18nVersionPlugin', () => {
     await (plugin as any).configResolved(
       { root: fixturesDir, command: 'build', define: defines }
     );
-    const value = defines['__I18N_VERSION__'];
+    const value = defines['__JSON_VERSION__'];
     expect(value).toBeTruthy();
     expect(JSON.parse(value)).toMatch(/^[0-9a-f]{8}$/);
   });

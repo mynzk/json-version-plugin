@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-
+import { type Plugin } from 'vite';
 import {
   DEFAULT_DEFINE_KEY,
   DEFAULT_LENGTH,
@@ -10,7 +10,7 @@ import { loadNative, NativeLoadError, type ComputeOptionsNative } from './native
 
 const PLUGIN_NAME = 'json-version-plugin';
 
-export default function jsonVersionPlugin(options: PluginOptions) {
+export default function jsonVersionPlugin(options: PluginOptions): Plugin {
   const {
     include,
     root = process.cwd(),

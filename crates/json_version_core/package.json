@@ -1,6 +1,6 @@
 {
   "name": "json-version-core",
-  "version": "0.1.6",
+  "version": "0.1.8",
   "private": true,
   "description": "Native module for json-version-plugin",
   "main": "index.js",
@@ -16,8 +16,8 @@
     ]
   },
   "scripts": {
-    "build": "napi build --platform --release --strip --no-js --output-dir ../../packages/json-version-plugin/dist",
-    "build:debug": "napi build --platform --no-js --output-dir ../../packages/json-version-plugin/dist"
+    "build": "napi build --platform --release --strip --no-js --dts native.d.ts --output-dir ../../packages/json-version-plugin/dist",
+    "build:debug": "napi build --platform --no-js --dts native.d.ts --output-dir ../../packages/json-version-plugin/dist"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.0.0"
