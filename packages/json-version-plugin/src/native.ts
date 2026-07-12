@@ -48,6 +48,15 @@ function moduleDir(): string {
 }
 
 /**
+ * Directory holding the prebuilt .node binaries. The JS bundle lives in
+ * `dist/js/` (set by tsup's `outDir`) and the binaries in `dist/native/`
+ * (downloaded by the release workflow), so we resolve one level up.
+ */
+function nativeDir(): string {
+  return join(moduleDir(), '..', 'native');
+}
+
+/**
  * Search a few candidate filenames for the prebuilt .node binary.
  * In dev/test we stub it via NATIVE_BINARY_PATH env var to point at a fake.
  */
@@ -56,7 +65,7 @@ function findBinary(): string {
     const override = process.env.NATIVE_BINARY_PATH;
     if (override) return override;
 
-    const dir = moduleDir();
+    const dir = nativeDir();
     const triCandidates =
       process.platform === 'linux'
         ? [`json-version-core.linux-${process.arch}-gnu.node`,

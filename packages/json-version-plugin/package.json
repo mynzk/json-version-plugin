@@ -1,17 +1,17 @@
 {
   "name": "@frada/json-version-plugin",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Vite plugin: hash JSON i18n files at startup and inject the version via config.define.",
   "author": "frada",
   "license": "MIT",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/js/index.cjs",
+  "module": "./dist/js/index.mjs",
+  "types": "./dist/js/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "types": "./dist/js/index.d.ts",
+      "import": "./dist/js/index.mjs",
+      "require": "./dist/js/index.cjs"
     }
   },
   "files": [

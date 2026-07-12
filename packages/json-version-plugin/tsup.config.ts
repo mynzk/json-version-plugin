@@ -7,11 +7,17 @@ import { defineConfig } from 'tsup';
 // runtime regardless of the package's "type" field.
 export default defineConfig({
   entry: ['src/index.ts'],
+  // Output to dist/js/ so the JS bundle and the prebuilt native binaries
+  // (downloaded into dist/native/ by CI) don't share a directory — tsup's
+  // `clean: true` would otherwise wipe the .node files mid-publish.
+  outDir: 'dist/js',
   format: ['cjs', 'esm'],
   outExtension({ format }) {
     return { js: format === 'cjs' ? '.cjs' : '.mjs' };
   },
   dts: true,
+  // Cleans only dist/js/ — dist/native/ is untouched, so downloaded
+  // prebuilt binaries survive a subsequent `pnpm build`.
   clean: true,
   target: 'es2022',
   sourcemap: true,

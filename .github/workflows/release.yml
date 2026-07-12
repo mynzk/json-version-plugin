@@ -147,25 +147,29 @@ jobs:
       # Each download is a distinct step (download-artifact cannot be invoked
       # from inside a `run:` shell). `merge-multiple: true` lets four calls
       # write into the same dir without clobbering each other.
+      # The four `.node` files land in `dist/native/`, separate from the JS
+      # bundle that tsup will emit into `dist/js/`. Keeping the two apart
+      # means tsup's `clean: true` on `dist/js/` can't accidentally wipe
+      # the prebuilt binaries.
       - uses: actions/download-artifact@v4
         with:
           name: native-linux-x64-gnu
-          path: packages/json-version-plugin/dist
+          path: packages/json-version-plugin/dist/native
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
           name: native-darwin-x64
-          path: packages/json-version-plugin/dist
+          path: packages/json-version-plugin/dist/native
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
           name: native-darwin-arm64
-          path: packages/json-version-plugin/dist
+          path: packages/json-version-plugin/dist/native
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
           name: native-win32-x64-msvc
-          path: packages/json-version-plugin/dist
+          path: packages/json-version-plugin/dist/native
           merge-multiple: true
 
       - name: Verify all four binaries present
@@ -173,7 +177,7 @@ jobs:
         run: |
           set -e
           for s in linux-x64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
-            f="packages/json-version-plugin/dist/json-version-core.$s.node"
+            f="packages/json-version-plugin/dist/native/json-version-core.$s.node"
             # `-s` rejects both missing and 0-byte files in one expression.
             if [ ! -s "$f" ]; then
               echo "::error::missing or empty $f. contents of dist/:"
