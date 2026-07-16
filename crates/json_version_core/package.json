@@ -1,11 +1,10 @@
 {
-  "name": "json-version-core",
+  "name": "@frada/json-version-core",
   "version": "0.1.9",
-  "private": true,
   "description": "Native module for json-version-plugin",
+  "license": "MIT",
   "main": "index.js",
   "types": "index.d.ts",
-  "license": "MIT",
   "napi": {
     "binaryName": "json-version-core",
     "targets": [
@@ -15,11 +14,21 @@
       "x86_64-pc-windows-msvc"
     ]
   },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "artifacts.json",
+    "prebuilds/"
+  ],
   "scripts": {
-    "build": "napi build --platform --release --strip --no-js --dts native.d.ts --output-dir ../../packages/json-version-plugin/dist/native",
-    "build:debug": "napi build --platform --no-js --dts native.d.ts --output-dir ../../packages/json-version-plugin/dist/native"
+    "build": "napi build --platform --release --strip --dts index.d.ts --output-dir .",
+    "build:debug": "napi build --platform --dts index.d.ts --output-dir .",
+    "prepublishOnly": "napi pre-publish -t npm --no-gh-release"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
