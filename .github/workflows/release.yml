@@ -125,7 +125,14 @@ jobs:
 
       - name: Move binaries into npm/<triple>/
         working-directory: crates/json_version_core
-        run: pnpm artifacts
+        # actions/download-artifact@v4 (with empty `with: {}`) drops files at
+        # $GITHUB_WORKSPACE/artifacts/<artifact-name>/, i.e. the repo root —
+        # two levels above this step's cwd. napi artifacts joins --output-dir
+        # onto its cwd via path.join (which does NOT short-circuit on absolute
+        # paths), so the value must be relative. Default --output-dir is
+        # ./artifacts, which would resolve to crates/json_version_core/artifacts
+        # and ENOENT — that's the bug this overrides.
+        run: pnpm artifacts --output-dir ../../artifacts
 
       - name: Sanity-check layout before publish
         shell: bash
