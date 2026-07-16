@@ -1,7 +1,7 @@
 # Split `json_version_core` into a separately-published npm package
 
 **Date:** 2026-07-16
-**Status:** Approved design — pending implementation plan
+**Status:** Approved design — Path A amendment applied, supersedes the §"Constraints" / §"CI changes" / §"Package script changes" sections below. The original target layout, version-sync mechanism, package shape, and test seam are unchanged.
 
 ## Goal
 
@@ -324,3 +324,262 @@ This removes the need for a hand-crafted `.node` stub file entirely.
 5. Split `release.yml` into two publish jobs. Verify on a `dry_run` first.
 6. First real release: bump Cargo.toml, run `pnpm run version:sync`, push tag
    `v0.2.0`, watch CI.
+
+---
+
+## Amendment — Path A (adopt the real napi-rs v3 model)
+
+The original design assumed `napi pre-publish -t npm --no-gh-release` would
+"bundle the prebuilds into the npm tarball." That was wrong.
+
+**Real behavior of `napi pre-publish -t npm --no-gh-release`** (verified against
+[`napi-rs/cli@3.x` docs](https://napi.rs/docs/cli/pre-publish) and the
+[`napi-rs/package-template-pnpm`](https://github.com/napi-rs/package-template-pnpm)
+template):
+
+1. The command does **not** collect build artifacts. It reads the root package
+   and `napi.targets` and, for each configured target:
+   - Sets that platform package's `version` to the root version.
+   - Merges an exact-version entry into the root `package.json`'s
+     `optionalDependencies` (e.g. `@frada/json-version-core-darwin-arm64`).
+   - Publishes the platform package via the configured npm client.
+2. It expects platform-specific scaffolding (per-target `package.json` + the
+   matching `.node` binary) to already exist in `npm/<triple>/` directories.
+   Those are produced by two separate commands the CI must run BEFORE
+   `pnpm publish`:
+   - `napi create-npm-dirs` — creates `npm/<triple>/package.json` scaffolds.
+   - `napi artifacts` — moves each `.node` binary into the right
+     `npm/<triple>/` directory.
+3. `--no-gh-release` is a real flag: it disables the GitHub Release creation
+   step (default is `ghRelease: true`). The user's intent — binaries to npm,
+   not GitHub Releases — matches what the flag does.
+
+So the actual release model is: **the published root package has
+`optionalDependencies` pointing at 4 per-platform satellite packages; consumers
+get the right binary via npm's optional install.** Five npm packages per
+release (one root + four satellites) instead of one bundled tarball.
+
+This is the **canonical napi-rs v3 pattern** (see
+`napi-rs/package-template-pnpm/.github/workflows/CI.yml` and the template's
+`package.json`'s `prepublishOnly: napi prepublish -t npm`). Our spec was wrong
+about the mechanism; the goal — split `@frada/json-version-core` into its own
+npm package — is intact.
+
+### What changes vs. the original spec
+
+These three sections are superseded. Everything else in this document
+(target layout, version-sync mechanism, plugin wiring, the test seam)
+stands as written.
+
+#### §"Constraints" (was: "Prebuilds bundled into the npm tarball")
+
+Superseded bullet:
+
+> - **Prebuilds bundled into the npm tarball.** `napi pre-publish -t npm --no-gh-release` puts all four platform binaries into the published artifact. No GitHub Releases for binaries.
+
+Replacement:
+
+> - **Binaries ship as per-platform npm packages.** `napi pre-publish -t npm --no-gh-release` publishes the four satellite packages
+>   (`@frada/json-version-core-darwin-arm64`, etc.) and merges them into the root
+>   `package.json`'s `optionalDependencies`. Consumers get the right platform's
+>   binary via npm's optional dep resolution. No GitHub Releases for binaries.
+> - **Five npm packages per release.** Root + four satellites, all at the same
+>   version.
+
+#### §"Package script changes" → "crates/json_version_core/package.json (after)"
+
+Deltas from the original spec:
+
+```diff
+   "scripts": {
+     "build": "napi build --platform --release --strip --dts index.d.ts --output-dir .",
+-    "build:debug": "napi build --platform --dts index.d.ts --output-dir .",
+-    "prepublishOnly": "napi pre-publish -t npm --no-gh-release"
++    "build:debug": "napi build --platform --dts index.d.ts --output-dir .",
++    "artifacts": "napi artifacts",
++    "prepublishOnly": "napi pre-publish -t npm --no-gh-release"
+   },
+   "files": [
+     "index.js",
+-    "index.d.ts",
+-    "artifacts.json",
+-    "prebuilds/"
++    "index.d.ts"
+   ]
+```
+
+The script alias `"artifacts": "napi artifacts"` is what the publish job will
+invoke (`pnpm artifacts`, per the upstream template's convention).
+
+The `files:` whitelist shrinks to just the loader + types. `npm/<triple>/` is
+intentionally NOT listed — it's a publish-time staging dir created by
+`napi create-npm-dirs`, not source.
+
+The root `package.json` does **not** carry a manual `optionalDependencies`
+block. `napi pre-publish` merges those entries in at publish time, so committing
+them by hand would either be overwritten or drift.
+
+#### §"CI changes" — replaces the entire "Job graph" + "`publish-core` job (new)" sub-sections
+
+**Updated job graph:**
+
+```
+build (matrix: 4 legs)   — produces one .node per leg, uploads as artifact
+        │
+        ▼
+publish-core           — needs: build
+                         downloads all 4 binary artifacts into ./artifacts/
+                         pnpm napi create-npm-dirs
+                         pnpm artifacts  (= `napi artifacts`)
+                         pnpm publish --access public --no-git-checks
+                            └─ prepublishOnly runs napi pre-publish -t npm --no-gh-release:
+                                 - publishes 4 satellite packages
+                                 - merges optionalDependencies into root package.json
+                            └─ then publishes the root @frada/json-version-core
+        │
+        ▼
+publish-plugin         — needs: publish-core
+                          pnpm install
+                          tsup build
+                          pnpm publish
+```
+
+**Updated `build` job artifact upload** — the path shrinks from a per-leg
+subdir to the bare `*.node` glob, since the publish job will use a single
+combined `download-artifact` call:
+
+```yaml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.suffix }}
+-          path: ${{ runner.temp }}/napi-out/${{ matrix.suffix }}/
++          path: '*.node'
+          if-no-files-found: error
+          retention-days: 14
+```
+
+The build step itself (`napi build --target ${{ matrix.target }} --platform
+--release --strip --no-js --output-dir $RUNNER_TEMP/napi-out`) stays — the
+per-leg output dir only matters as a staging area for the `*.node` upload
+path. We can simplify it to `--output-dir .` so the binary lands next to the
+crate, but that's optional; either works.
+
+**Updated `publish-core` job** — single combined `download-artifact` for all
+four platform binaries, then run `create-npm-dirs` + `artifacts` + `pnpm
+publish` (the last triggers prepublishOnly):
+
+```yaml
+  publish-core:
+    name: publish @frada/json-version-core
+    needs: build
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+      || (github.event_name == 'workflow_dispatch' && inputs.dry_run != 'true')
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org/'
+
+      # One download that pulls every native-* artifact into ./artifacts/.
+      # Each landed in its own subdir (artifacts/native-<suffix>/<binary>)
+      # because actions/download-artifact namespaces them by name; napi
+      # artifacts' default scan walks that tree.
+      - uses: actions/download-artifact@v4
+        with: {}
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Create per-platform npm dirs
+        working-directory: crates/json_version_core
+        run: pnpm napi create-npm-dirs
+
+      - name: Move binaries into npm/<triple>/
+        working-directory: crates/json_version_core
+        run: pnpm artifacts
+
+      - name: Sanity-check the layout before publish
+        shell: bash
+        run: |
+          set -e
+          for s in linux-x64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
+            f="crates/json_version_core/npm/$s/json-version-core.$s.node"
+            if [ ! -s "$f" ]; then
+              echo "::error::missing or empty $f. contents of npm/:"
+              ls -la crates/json_version_core/npm || true
+              exit 1
+            fi
+          done
+          echo "ok: all four native binaries staged under npm/"
+
+      - name: Verify version matches tag
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -e
+          v=$(jq -r .version crates/json_version_core/package.json)
+          tag=${GITHUB_REF#refs/tags/v}
+          if [ "$v" != "$tag" ]; then
+            echo "::error::core version mismatch: package.json=$v, tag=$tag"
+            exit 1
+          fi
+          echo "ok: publishing $v"
+
+      - name: Verify npm auth
+        run: npm whoami --registry=https://registry.npmjs.org/
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # prepublishOnly (napi pre-publish -t npm --no-gh-release) runs first
+      # inside this pnpm publish. It publishes the four satellite packages
+      # and merges optionalDependencies into the root package.json. Then the
+      # pnpm publish itself publishes the root @frada/json-version-core.
+      - name: Publish @frada/json-version-core
+        working-directory: crates/json_version_core
+        run: pnpm publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
+#### §".gitignore additions"
+
+```diff
+-# napi-rs prebuilds — populated by CI, never committed
+-crates/json_version_core/prebuilds/
+-crates/json_version_core/artifacts.json
++# napi-rs per-platform staging dir — created by `napi create-npm-dirs`
++# at publish time, never committed.
++crates/json_version_core/npm/
+```
+
+The upload path simplification (`'*.node'` instead of a per-leg subdir) means
+the `*.node` gitignore rule already in place covers the binary artifacts at
+any depth.
+
+### Why this is the correct model
+
+The underlying question — "does the user want binaries via GitHub Releases or
+via npm?" — was answered unambiguously by the user choosing
+`--no-gh-release`. That flag's only purpose is to suppress GitHub Release
+creation; the rest of `napi pre-publish` (publishing per-platform packages to
+npm, merging `optionalDependencies`) is unconditional. So binaries already
+land on npm one way or the other; the original spec just labeled the wrong
+destination.
+
+This amendment doesn't change the user-facing story (still 4 binaries across
+4 platforms, all at one npm-scoped package name, no GitHub Release). It
+changes the npm-internal story from "one fat tarball" to "root + 4 thin
+satellite tarballs wired via optionalDependencies" — which is how
+`@napi-rs/cli`, `image`, `snappy`, and ~every other napi-rs v3 package on npm
+work today.
+
