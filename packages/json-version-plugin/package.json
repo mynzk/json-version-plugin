@@ -20,7 +20,6 @@
     "README.md"
   ],
   "scripts": {
-    "postbuild": "pnpm --filter json-version-core build",
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
@@ -29,6 +28,9 @@
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0"
+  },
+  "dependencies": {
+    "@frada/json-version-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

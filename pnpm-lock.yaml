@@ -15,6 +15,10 @@ importers:
         version: 3.7.2(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@20.19.43)
 
   packages/json-version-plugin:
+    dependencies:
+      '@frada/json-version-core':
+        specifier: workspace:*
+        version: link:../../crates/json_version_core
     devDependencies:
       '@types/node':
         specifier: ^20.11.0
