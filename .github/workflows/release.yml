@@ -110,11 +110,11 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org/'
 
-      # Pulls every `native-*` artifact at once; each lands in its own
-      # subdir under ./artifacts/. napi artifacts walks that tree when
-      # populating npm/<triple>/ in a later step.
+      # 显式指定 path，将所有构建产物统一下载并平铺到 artifacts 目录下
       - uses: actions/download-artifact@v4
-        with: {}
+        with:
+          path: artifacts
+          merge-multiple: true # 这个参数非常关键，它会忽略 artifact 名字子目录，直接把文件合并平铺到 path 中
 
       - name: Install workspace deps
         run: pnpm install --frozen-lockfile --prefer-offline
