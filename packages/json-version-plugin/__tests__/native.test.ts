@@ -1,19 +1,22 @@
-import { describe, it, expect } from 'vitest';
-import { loadNative, NativeModule, NativeLoadError } from '../src/native.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  loadNative,
+  __setNativeForTests,
+  type NativeModule,
+} from '../src/native.js';
 
 describe('native loader', () => {
-  it('exposes a NativeModule interface', () => {
-    const mod: NativeModule = {
-      computeVersion(_opts: unknown): string {
-        return 'deadbeef';
-      },
-    };
-    expect(mod.computeVersion({})).toBe('deadbeef');
+  beforeEach(() => {
+    // Clear any test stub the prior test installed.
+    __setNativeForTests(undefined as unknown as NativeModule);
   });
 
-  it('rejects missing module with a clear error', async () => {
-    await expect(loadNative('/definitely/not/a/real/path', 'computeVersion')).rejects.toBeInstanceOf(
-      NativeLoadError
-    );
+  it('returns the module set by __setNativeForTests', async () => {
+    const stub: NativeModule = {
+      computeVersion: () => 'deadbeef',
+    };
+    __setNativeForTests(stub);
+    const mod = await loadNative();
+    expect(mod.computeVersion({ root: '.', include: [], length: 8 })).toBe('deadbeef');
   });
 });

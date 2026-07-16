@@ -6,7 +6,7 @@ import {
   DEFAULT_LENGTH,
   type PluginOptions,
 } from './types.js';
-import { loadNative, NativeLoadError, type ComputeOptionsNative } from './native.js';
+import { loadNative, type ComputeOptionsNative } from './native.js';
 
 const PLUGIN_NAME = 'json-version-plugin';
 
@@ -39,9 +39,6 @@ export default function jsonVersionPlugin(options: PluginOptions): Plugin {
       try {
         native = await loadNative();
       } catch (err) {
-        if (err instanceof NativeLoadError) {
-          throw err;
-        }
         throw new Error(`${PLUGIN_NAME}: ${(err as Error).message}`);
       }
 
