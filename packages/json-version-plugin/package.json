@@ -1,6 +1,6 @@
 {
   "name": "@frada/json-version-plugin",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Vite plugin: hash JSON i18n files at startup and inject the version via config.define.",
   "author": "frada",
   "license": "MIT",

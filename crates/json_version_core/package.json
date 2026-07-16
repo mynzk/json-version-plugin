@@ -1,6 +1,6 @@
 {
   "name": "@frada/json-version-core",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Native module for json-version-plugin",
   "license": "MIT",
   "main": "index.js",
