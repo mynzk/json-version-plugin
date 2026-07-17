@@ -43,7 +43,6 @@ jobs:
             target: aarch64-unknown-linux-musl
             suffix: linux-arm64-musl
             use_zig: true # Rolldown 方案：ARM64 musl 同样通过 zigbuild 优雅搞定
-            use_cross: true
           - os: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             suffix: linux-arm-gnueabihf
@@ -85,6 +84,12 @@ jobs:
         with:
           tool: cargo-zigbuild
 
+      # ✨【新增步骤】如果是需要容器化交叉编译的平台，快速安装 cross 工具
+      - uses: taiki-e/install-action@v2
+        if: ${{ matrix.use_cross }}
+        with:
+          tool: cross
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -99,15 +104,19 @@ jobs:
         working-directory: crates/json_version_core
         shell: bash
         run: |
-          # 根据矩阵变量，自动化决定是否向 napi build 尾部追加特定的容器化交叉编译指令
           ARGS=""
+
+          # 流派 1：如果是 Docker 交叉编译
           if [ "${{ matrix.use_cross }}" = "true" ]; then
             ARGS="--use-cross"
           fi
 
-          # 针对 musl 环境，切换底层编译器为刚刚安装好的 zig
+          # 流派 2：如果是 Zig 高性能编译 (Rolldown 标准解法)
           if [ "${{ matrix.use_zig }}" = "true" ]; then
-            export CARGO_BUILD_TARGET_RUNNER="" 
+            export CARGO_BUILD_TARGET_RUNNER=""
+
+            # ✨ NAPI-RS 官方原生支持通过 --zig 参数来切换为使用 cargo-zigbuild 工具链
+            ARGS="--zig"
           fi
 
           pnpm exec napi build \
@@ -118,6 +127,7 @@ jobs:
             $ARGS
         env:
           MATRIX_TARGET: ${{ matrix.target }}
+
 
       - name: Verify produced filename
         shell: bash
