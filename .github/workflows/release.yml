@@ -33,20 +33,21 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             suffix: linux-x64-musl
+            flag: -x
 
           # --- Linux (ARM / 交叉编译) ---
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             suffix: linux-arm64-gnu
-            use_cross: true # Rolldown 方案：调用 NAPI-RS 容器化交叉编译
+            flag: --use-napi-cross
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             suffix: linux-arm64-musl
-            use_zig: true # Rolldown 方案：ARM64 musl 同样通过 zigbuild 优雅搞定
+            flag: -x
           - os: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             suffix: linux-arm-gnueabihf
-            use_cross: true # Rolldown 方案：32位 ARMv7 使用容器化快速交叉链接
+            flag: --use-napi-cross
 
           # --- macOS ---
           - os: macos-latest
@@ -72,23 +73,17 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # Rolldown 核心提效点 1：若属于 musl 平台，自动就地安装高性能 Zig 编译器
       - uses: mlugg/setup-zig@v2
-        if: ${{ matrix.use_zig }}
+        if: ${{ contains(matrix.target, 'musl') }}
         with:
-          version: 0.13.0
-
-      # Rolldown 核心提效点 2：若属于 musl 平台，全局安装用于 Rust 的 cargo-zigbuild 工具链
-      - uses: taiki-e/install-action@v2
-        if: ${{ matrix.use_zig }}
+          version: 0.15.2
+      - name: Install cargo-zigbuild
+        uses: taiki-e/install-action@v2
+        if: ${{ contains(matrix.target, 'musl') }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           tool: cargo-zigbuild
-
-      # ✨【新增步骤】如果是需要容器化交叉编译的平台，快速安装 cross 工具
-      - uses: taiki-e/install-action@v2
-        if: ${{ matrix.use_cross }}
-        with:
-          tool: cross
 
       - uses: pnpm/action-setup@v4
 
@@ -104,29 +99,16 @@ jobs:
         working-directory: crates/json_version_core
         shell: bash
         run: |
-          ARGS=""
-
-          # 流派 1：如果是 Docker 交叉编译
-          if [ "${{ matrix.use_cross }}" = "true" ]; then
-            ARGS="--use-cross"
-          fi
-
-          # 流派 2：如果是 Zig 高性能编译 (Rolldown 标准解法)
-          if [ "${{ matrix.use_zig }}" = "true" ]; then
-            export CARGO_BUILD_TARGET_RUNNER=""
-
-            # ✨ NAPI-RS 官方原生支持通过 --zig 参数来切换为使用 cargo-zigbuild 工具链
-            ARGS="--zig"
-          fi
-
+          # 动态拼接官方推荐的交叉编译参数 ${{ matrix.flag }}
           pnpm exec napi build \
             --target "$MATRIX_TARGET" \
             --platform \
             --release --strip --no-js \
             --output-dir . \
-            $ARGS
+            ${{ matrix.flag }}
         env:
           MATRIX_TARGET: ${{ matrix.target }}
+
 
 
       - name: Verify produced filename
