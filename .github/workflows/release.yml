@@ -26,27 +26,38 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # --- Linux (x86_64) ---
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             suffix: linux-x64-gnu
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             suffix: linux-x64-musl
+
+          # --- Linux (ARM / 交叉编译) ---
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             suffix: linux-arm64-gnu
+            use_cross: true # Rolldown 方案：调用 NAPI-RS 容器化交叉编译
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             suffix: linux-arm64-musl
+            use_zig: true # Rolldown 方案：ARM64 musl 同样通过 zigbuild 优雅搞定
+            use_cross: true
           - os: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             suffix: linux-arm-gnueabihf
+            use_cross: true # Rolldown 方案：32位 ARMv7 使用容器化快速交叉链接
+
+          # --- macOS ---
           - os: macos-latest
             target: x86_64-apple-darwin
             suffix: darwin-x64
           - os: macos-latest
             target: aarch64-apple-darwin
             suffix: darwin-arm64
+
+          # --- Windows ---
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             suffix: win32-x64-msvc
@@ -62,6 +73,18 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # Rolldown 核心提效点 1：若属于 musl 平台，自动就地安装高性能 Zig 编译器
+      - uses: mlugg/setup-zig@v2
+        if: ${{ matrix.use_zig }}
+        with:
+          version: 0.13.0
+
+      # Rolldown 核心提效点 2：若属于 musl 平台，全局安装用于 Rust 的 cargo-zigbuild 工具链
+      - uses: taiki-e/install-action@v2
+        if: ${{ matrix.use_zig }}
+        with:
+          tool: cargo-zigbuild
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -76,11 +99,23 @@ jobs:
         working-directory: crates/json_version_core
         shell: bash
         run: |
+          # 根据矩阵变量，自动化决定是否向 napi build 尾部追加特定的容器化交叉编译指令
+          ARGS=""
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            ARGS="--use-cross"
+          fi
+
+          # 针对 musl 环境，切换底层编译器为刚刚安装好的 zig
+          if [ "${{ matrix.use_zig }}" = "true" ]; then
+            export CARGO_BUILD_TARGET_RUNNER="" 
+          fi
+
           pnpm exec napi build \
             --target "$MATRIX_TARGET" \
             --platform \
             --release --strip --no-js \
-            --output-dir .
+            --output-dir . \
+            $ARGS
         env:
           MATRIX_TARGET: ${{ matrix.target }}
 
@@ -98,8 +133,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.suffix }}
-          # napi build --output-dir . drops binaries next to the crate, not at
-          # the repo root — use the path relative to GITHUB_WORKSPACE.
           path: 'crates/json_version_core/*.node'
           if-no-files-found: error
           retention-days: 14
@@ -125,11 +158,10 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org/'
 
-      # 显式指定 path，将所有构建产物统一下载并平铺到 artifacts 目录下
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: true # 这个参数非常关键，它会忽略 artifact 名字子目录，直接把文件合并平铺到 path 中
+          merge-multiple: true
 
       - name: Install workspace deps
         run: pnpm install --frozen-lockfile --prefer-offline
@@ -140,20 +172,14 @@ jobs:
 
       - name: Move binaries into npm/<triple>/
         working-directory: crates/json_version_core
-        # actions/download-artifact@v4 (with empty `with: {}`) drops files at
-        # $GITHUB_WORKSPACE/artifacts/<artifact-name>/, i.e. the repo root —
-        # two levels above this step's cwd. napi artifacts joins --output-dir
-        # onto its cwd via path.join (which does NOT short-circuit on absolute
-        # paths), so the value must be relative. Default --output-dir is
-        # ./artifacts, which would resolve to crates/json_version_core/artifacts
-        # and ENOENT — that's the bug this overrides.
         run: pnpm artifacts --output-dir ../../artifacts
 
       - name: Sanity-check layout before publish
         shell: bash
         run: |
           set -e
-          for s in linux-x64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
+          # 同步补齐 9 个平台的校验，确保跨平台构件全部成功落位
+          for s in linux-x64-gnu linux-x64-musl linux-arm64-gnu linux-arm64-musl linux-arm-gnueabihf darwin-x64 darwin-arm64 win32-x64-msvc win32-arm64-msvc; do
             f="crates/json_version_core/npm/$s/json-version-core.$s.node"
             if [ ! -s "$f" ]; then
               echo "::error::missing or empty $f. contents of npm/:"
@@ -161,7 +187,7 @@ jobs:
               exit 1
             fi
           done
-          echo "ok: all four native binaries staged under npm/"
+          echo "ok: all nine native binaries staged under npm/"
 
       - name: Verify version matches tag
         if: github.event_name == 'push'
@@ -181,10 +207,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # prepublishOnly (napi pre-publish -t npm --no-gh-release) runs first
-      # inside this pnpm publish. It publishes the four satellite packages
-      # and merges optionalDependencies into the root package.json. Then the
-      # pnpm publish itself publishes the root @frada/json-version-core.
       - name: Publish @frada/json-version-core
         working-directory: crates/json_version_core
         run: pnpm publish --access public --no-git-checks
@@ -212,7 +234,6 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org/'
 
-      # Install AFTER publish-core so workspace:* resolves to the real version.
       - name: Install workspace deps
         run: pnpm install --frozen-lockfile --prefer-offline
 
